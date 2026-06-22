@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $# -ne 1 ]; then
+  echo "usage: ./make_release patch|minor|major|<x.y.z>" >&2
+  exit 1
+fi
+
+VERSION_ARG="$1"
+CURRENT="$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/version = "([^"]+)"/\1/')"
+IFS=. read -r MAJ MIN PAT <<<"$CURRENT"
+
+case "$VERSION_ARG" in
+  patch) VERSION="${MAJ}.${MIN}.$((PAT + 1))" ;;
+  minor) VERSION="${MAJ}.$((MIN + 1)).0" ;;
+  major) VERSION="$((MAJ + 1)).0.0" ;;
+  *) VERSION="$VERSION_ARG" ;;
+esac
+
+sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
+git add pyproject.toml
+git commit -sm "bump to $VERSION"
+if [[ ! -v NO_TAG ]]; then
+  git tag "v$VERSION"
+  git push --tags
+fi
+git push
+
+echo "$VERSION"
