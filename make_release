@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # Usage: ./make_release [next|major|minor|patch|<x.y.z>]
+# Prints only the bare semver on stdout (last line). Progress on stderr.
 MODE="${1:-next}"
 
 case "$MODE" in
@@ -15,13 +16,13 @@ esac
 VERSION="${VERSION#v}"
 
 sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
-
 git add pyproject.toml
-git commit -sm "bump to $VERSION" || true
+
+git commit -sm "bump to $VERSION" 1>&2 || true
 if [[ ! -v NO_TAG ]]; then
   git tag "$VERSION"
-  git push origin "$VERSION"
+  git push origin "$VERSION" 1>&2
 fi
-git push origin HEAD
+git push origin HEAD 1>&2
 
-echo "$VERSION"
+printf '%s\n' "$VERSION"
