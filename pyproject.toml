@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fetchurl-sdk"
-version = "0.2.0"
+version = "0.2.1"
 description = "Protocol-level client SDK for fetchurl content-addressable cache servers"
 readme = "README.md"
 requires-python = ">=3.8"
