@@ -6,23 +6,21 @@ MODE="${1:-next}"
 
 case "$MODE" in
   next|major|minor|patch)
-    TAG="$(svu "$MODE")"
+    VERSION="$(svu "$MODE")"
     ;;
   *)
-    TAG="${MODE#v}"
-    TAG="v$TAG"
+    VERSION="${MODE#v}"
     ;;
 esac
-
-VERSION="${TAG#v}"
+VERSION="${VERSION#v}"
 
 sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
 
 git add pyproject.toml
 git commit -sm "bump to $VERSION" || true
 if [[ ! -v NO_TAG ]]; then
-  git tag "$TAG"
-  git push origin "$TAG"
+  git tag "$VERSION"
+  git push origin "$VERSION"
 fi
 git push origin HEAD
 
