@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage: ./make_release [next|major|minor|patch|<x.y.z>]
-# Prints only the bare semver on stdout (last line). Progress on stderr.
+# Only the semver is printed on stdout; everything else goes to stderr.
 MODE="${1:-next}"
 
 case "$MODE" in
