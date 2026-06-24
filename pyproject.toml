@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fetchurl-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Protocol-level client SDK for fetchurl content-addressable cache servers"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fetchurl/sdk-python"
+Homepage = "https://pypi.org/project/fetchurl-sdk/"
 Repository = "https://github.com/fetchurl/sdk-python"
 "Bug Tracker" = "https://github.com/fetchurl/sdk-python/issues"
 

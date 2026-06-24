@@ -1,0 +1,3 @@
+# Keep in sync with git tags (vX.Y.Z) and registry versions (X.Y.Z).
+tag.prefix: "v"
+v0: true
