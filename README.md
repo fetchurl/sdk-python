@@ -44,12 +44,3 @@ uv run python -m unittest test_fetchurl.py
 # Integration (Docker + image):
 # FETCHURL_TEST_IMAGE=fetchurl:local uv run --extra test python -m unittest test_fetchurl_integration.py
 ```
-
-## Related
-
-| Repo | Role |
-|------|------|
-| [fetchurl/spec](https://github.com/fetchurl/spec) | Protocol |
-| [fetchurl/fetchurl](https://github.com/fetchurl/fetchurl) | Go server |
-| [fetchurl/sdk-js](https://github.com/fetchurl/sdk-js) | JavaScript SDK |
-| [fetchurl/sdk-rust](https://github.com/fetchurl/sdk-rust) | Rust SDK |
