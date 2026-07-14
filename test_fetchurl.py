@@ -73,6 +73,16 @@ class TestHashVerifier(unittest.TestCase):
         v.finish()
         self.assertEqual(out.getvalue(), data)
 
+    def test_success_uppercase_expected(self):
+        """Spec requires lowercase hex; callers may still pass mixed case."""
+        data = b"hello world"
+        h = sha256hex(data).upper()
+        out = io.BytesIO()
+        v = fetchurl.HashVerifier("sha256", h, out)
+        v.write(data)
+        v.finish()
+        self.assertEqual(out.getvalue(), data)
+
     def test_mismatch(self):
         data = b"hello world"
         wrong_hash = sha256hex(b"wrong")
@@ -114,6 +124,15 @@ class TestFetchSession(unittest.TestCase):
 
         self.assertIsNone(session.next_attempt())
         self.assertFalse(session.succeeded())
+
+    @patch.dict(os.environ, {"FETCHURL_SERVER": '"http://cache/api/fetchurl"'})
+    def test_hash_lowercased_in_server_url(self):
+        h = sha256hex(b"test").upper()
+        session = fetchurl.FetchSession("sha256", h, ["http://src"])
+        attempt = session.next_attempt()
+        self.assertIsNotNone(attempt)
+        self.assertTrue(attempt.url.endswith(f"/sha256/{h.lower()}"))
+        self.assertNotIn(h, attempt.url)
 
     @patch.dict(os.environ, {"FETCHURL_SERVER": '"http://cache/api/fetchurl"'})
     def test_success_stops(self):

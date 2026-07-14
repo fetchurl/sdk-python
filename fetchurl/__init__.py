@@ -176,7 +176,8 @@ class HashVerifier:
     def __init__(self, algo: str, expected_hash: str, writer: BinaryIO):
         self._writer = writer
         self._hasher = hashlib.new(normalize_algo(algo))
-        self._expected = expected_hash
+        # Spec: hashes MUST be lowercase hex.
+        self._expected = expected_hash.lower()
         self._bytes_written = 0
 
     @property
@@ -232,7 +233,8 @@ class FetchSession:
             raise UnsupportedAlgorithmError(algo)
 
         self._algo = algo
-        self._hash = hash
+        # Spec: hashes MUST be lowercase hex. Normalize so mixed-case callers still work.
+        self._hash = hash.lower()
         self._done = False
         self._success = False
         self._attempts: list[FetchAttempt] = []
@@ -242,7 +244,7 @@ class FetchSession:
 
         for server in servers:
             base = server.rstrip("/")
-            url = f"{base}/{algo}/{hash}"
+            url = f"{base}/{algo}/{self._hash}"
             headers: dict[str, str] = {}
             if source_header:
                 headers["X-Source-Urls"] = source_header
