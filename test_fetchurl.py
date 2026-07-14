@@ -164,6 +164,12 @@ class TestFetch(unittest.TestCase):
         thread.start()
         return server, f"http://127.0.0.1:{port}"
 
+    @staticmethod
+    def _stop_server(server: HTTPServer) -> None:
+        """shutdown alone leaves the listening socket open (ResourceWarning)."""
+        server.shutdown()
+        server.server_close()
+
     def test_direct_download(self):
         content = b"test content"
         h = sha256hex(content)
@@ -185,7 +191,7 @@ class TestFetch(unittest.TestCase):
                 fetchurl.fetch(fetchurl.UrllibFetcher(), "sha256", h, [url], out)
             self.assertEqual(out.getvalue(), content)
         finally:
-            server.shutdown()
+            self._stop_server(server)
 
     def test_hash_mismatch_raises_partial(self):
         class Handler(BaseHTTPRequestHandler):
@@ -206,7 +212,7 @@ class TestFetch(unittest.TestCase):
                         fetchurl.UrllibFetcher(), "sha256", sha256hex(b"right"), [url], out
                     )
         finally:
-            server.shutdown()
+            self._stop_server(server)
 
     def test_all_sources_failed(self):
         class Handler(BaseHTTPRequestHandler):
@@ -226,7 +232,7 @@ class TestFetch(unittest.TestCase):
                         fetchurl.UrllibFetcher(), "sha256", sha256hex(b"x"), [url], out
                     )
         finally:
-            server.shutdown()
+            self._stop_server(server)
 
     def test_server_fallback_to_direct(self):
         content = b"fallback content"
@@ -260,8 +266,8 @@ class TestFetch(unittest.TestCase):
                 )
             self.assertEqual(out.getvalue(), content)
         finally:
-            bad.shutdown()
-            good.shutdown()
+            self._stop_server(bad)
+            self._stop_server(good)
 
 
 if __name__ == "__main__":
