@@ -374,7 +374,7 @@ def fetch(
             continue
 
         if status != 200:
-            last_error = Exception(f"unexpected status {status}")
+            last_error = FetchUrlError(f"unexpected status {status}")
             continue
 
         verifier = session.verifier(out)
@@ -415,7 +415,7 @@ async def async_fetch(
             continue
 
         if status != 200:
-            last_error = Exception(f"unexpected status {status}")
+            last_error = FetchUrlError(f"unexpected status {status}")
             continue
 
         verifier = session.verifier(out)
