@@ -205,13 +205,13 @@ class HashVerifier:
 class FetchSession:
     """State machine driving the fetchurl client protocol.
 
-    Servers are tried first (with X-Source-Urls header forwarded),
-    then direct source URLs in random order per spec.
+    Servers from ``FETCHURL_SERVER`` are tried first (with X-Source-Urls
+    header forwarded), then direct source URLs in random order per spec.
 
     The caller iterates through attempts, makes HTTP requests
     with their preferred library, and reports results back::
 
-        session = FetchSession(servers, "sha256", hash, source_urls)
+        session = FetchSession("sha256", hash, source_urls)
         while attempt := session.next_attempt():
             # attempt.url and attempt.headers tell you what to request
             ...
