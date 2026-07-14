@@ -39,7 +39,7 @@ Clients **must** treat the server as untrusted and verify the hash (this SDK doe
 ## Development
 
 ```bash
-uv sync --dev
+uv sync --extra test
 uv run python -m unittest test_fetchurl.py
 # Integration (Docker + image):
 # FETCHURL_TEST_IMAGE=fetchurl:local uv run --extra test python -m unittest test_fetchurl_integration.py
