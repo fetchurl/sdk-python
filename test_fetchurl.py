@@ -226,11 +226,13 @@ class TestFetch(unittest.TestCase):
         server, url = self._start_server(Handler)
         try:
             out = io.BytesIO()
-            with self.assertRaises(fetchurl.AllSourcesFailedError):
+            with self.assertRaises(fetchurl.AllSourcesFailedError) as cm:
                 with patch.dict(os.environ, {}, clear=True):
                     fetchurl.fetch(
                         fetchurl.UrllibFetcher(), "sha256", sha256hex(b"x"), [url], out
                     )
+            self.assertIsInstance(cm.exception.last_error, fetchurl.FetchUrlError)
+            self.assertIn("404", str(cm.exception.last_error))
         finally:
             self._stop_server(server)
 
