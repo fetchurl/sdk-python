@@ -87,6 +87,13 @@ class MissingSourceUrlsError(FetchUrlError):
 
 _SUPPORTED_ALGOS = {"sha1", "sha256", "sha512"}
 
+# Full digest length in hex characters for each supported algorithm.
+_DIGEST_HEX_LEN = {
+    "sha1": 40,
+    "sha256": 64,
+    "sha512": 128,
+}
+
 
 def normalize_algo(name: str) -> str:
     """Normalize algorithm name per spec: lowercase, only [a-z0-9]."""
@@ -96,6 +103,44 @@ def normalize_algo(name: str) -> str:
 def is_supported(algo: str) -> bool:
     """Check if a hash algorithm is supported."""
     return normalize_algo(algo) in _SUPPORTED_ALGOS
+
+
+def expected_hex_length(algo: str) -> int:
+    """Expected hex length of a full digest for *algo*.
+
+    Raises UnsupportedAlgorithmError if the algorithm is not supported.
+    """
+    key = normalize_algo(algo)
+    try:
+        return _DIGEST_HEX_LEN[key]
+    except KeyError:
+        raise UnsupportedAlgorithmError(key) from None
+
+
+def normalize_content_hash(algo: str, hash: str | None) -> str:
+    """Normalize a content hash per the fetchurl spec: full-length lowercase hex.
+
+    Rejects None, blank, non-hex, and wrong-length values before any network I/O.
+    Mixed-case hex is accepted and returned lowercased.
+
+    Raises:
+        FetchUrlError: if the hash is missing or not valid hex for the algorithm.
+        UnsupportedAlgorithmError: if *algo* is not supported.
+    """
+    if hash is None or not str(hash).strip():
+        raise FetchUrlError("hash is required")
+    key = normalize_algo(algo)
+    expected_len = expected_hex_length(key)
+    lower = str(hash).lower()
+    if len(lower) != expected_len:
+        raise FetchUrlError(
+            f"hash must be {expected_len} hex characters for {key} "
+            f"(got {len(lower)})"
+        )
+    for c in lower:
+        if c not in "0123456789abcdef":
+            raise FetchUrlError("hash must be hexadecimal")
+    return lower
 
 
 # --- SFV helpers (RFC 8941 string lists) ---
@@ -175,9 +220,10 @@ class HashVerifier:
 
     def __init__(self, algo: str, expected_hash: str, writer: BinaryIO):
         self._writer = writer
-        self._hasher = hashlib.new(normalize_algo(algo))
-        # Spec: hashes MUST be lowercase hex.
-        self._expected = expected_hash.lower()
+        normalized = normalize_algo(algo)
+        # Spec: hashes MUST be lowercase hex of the full digest. Fail early on garbage.
+        self._expected = normalize_content_hash(normalized, expected_hash)
+        self._hasher = hashlib.new(normalized)
         self._bytes_written = 0
 
     @property
@@ -227,17 +273,14 @@ class FetchSession:
         if not source_urls:
             raise MissingSourceUrlsError()
 
-        if hash is None or not str(hash).strip():
-            raise FetchUrlError("hash is required")
-
         servers = parse_fetchurl_server(os.environ.get("FETCHURL_SERVER", ""))
         algo = normalize_algo(algo)
         if not is_supported(algo):
             raise UnsupportedAlgorithmError(algo)
 
         self._algo = algo
-        # Spec: hashes MUST be lowercase hex. Normalize so mixed-case callers still work.
-        self._hash = hash.lower()
+        # Spec: hashes MUST be lowercase hex of the full digest. Fail early on garbage.
+        self._hash = normalize_content_hash(algo, hash)
         self._done = False
         self._success = False
         self._attempts: list[FetchAttempt] = []
