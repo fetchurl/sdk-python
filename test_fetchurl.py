@@ -103,6 +103,21 @@ class TestFetchSession(unittest.TestCase):
         with self.assertRaises(fetchurl.UnsupportedAlgorithmError):
             fetchurl.FetchSession("md5", "abc", ["http://src"])
 
+    def test_empty_hash_rejected(self):
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession("sha256", "", ["http://src"])
+        self.assertIn("hash is required", str(ctx.exception))
+
+    def test_blank_hash_rejected(self):
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession("sha256", "   ", ["http://src"])
+        self.assertIn("hash is required", str(ctx.exception))
+
+    def test_none_hash_rejected(self):
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession("sha256", None, ["http://src"])  # type: ignore[arg-type]
+        self.assertIn("hash is required", str(ctx.exception))
+
     @patch.dict(os.environ, {"FETCHURL_SERVER": '"http://cache1/api/fetchurl", "http://cache2/api/fetchurl"'})
     def test_attempt_ordering(self):
         h = sha256hex(b"test")

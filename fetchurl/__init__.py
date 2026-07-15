@@ -227,6 +227,9 @@ class FetchSession:
         if not source_urls:
             raise MissingSourceUrlsError()
 
+        if hash is None or not str(hash).strip():
+            raise FetchUrlError("hash is required")
+
         servers = parse_fetchurl_server(os.environ.get("FETCHURL_SERVER", ""))
         algo = normalize_algo(algo)
         if not is_supported(algo):
