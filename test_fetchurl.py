@@ -37,6 +37,42 @@ class TestIsSupported(unittest.TestCase):
         self.assertFalse(fetchurl.is_supported("md5"))
 
 
+class TestNormalizeContentHash(unittest.TestCase):
+    def test_expected_hex_length(self):
+        self.assertEqual(fetchurl.expected_hex_length("sha1"), 40)
+        self.assertEqual(fetchurl.expected_hex_length("sha256"), 64)
+        self.assertEqual(fetchurl.expected_hex_length("sha512"), 128)
+        self.assertEqual(fetchurl.expected_hex_length("SHA-256"), 64)
+
+    def test_expected_hex_length_unsupported(self):
+        with self.assertRaises(fetchurl.UnsupportedAlgorithmError):
+            fetchurl.expected_hex_length("md5")
+
+    def test_lowercases(self):
+        upper = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+        self.assertEqual(
+            fetchurl.normalize_content_hash("sha256", upper),
+            upper.lower(),
+        )
+
+    def test_rejects_wrong_length(self):
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.normalize_content_hash("sha256", "abcd")
+        self.assertIn("hex characters", str(ctx.exception))
+
+    def test_rejects_non_hex(self):
+        almost = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85g"
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.normalize_content_hash("sha256", almost)
+        self.assertIn("hexadecimal", str(ctx.exception))
+
+    def test_rejects_blank(self):
+        with self.assertRaises(fetchurl.FetchUrlError):
+            fetchurl.normalize_content_hash("sha256", "  ")
+        with self.assertRaises(fetchurl.FetchUrlError):
+            fetchurl.normalize_content_hash("sha256", None)  # type: ignore[arg-type]
+
+
 class TestSFV(unittest.TestCase):
     def test_encode(self):
         self.assertEqual(
@@ -93,6 +129,19 @@ class TestHashVerifier(unittest.TestCase):
             v.finish()
         self.assertEqual(ctx.exception.expected, wrong_hash)
 
+    def test_rejects_non_hex_expected(self):
+        bad = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85g"
+        with self.assertRaises(fetchurl.FetchUrlError):
+            fetchurl.HashVerifier("sha256", bad, io.BytesIO())
+
+    def test_rejects_wrong_length_expected(self):
+        with self.assertRaises(fetchurl.FetchUrlError):
+            fetchurl.HashVerifier("sha256", "abcd", io.BytesIO())
+
+    def test_rejects_blank_expected(self):
+        with self.assertRaises(fetchurl.FetchUrlError):
+            fetchurl.HashVerifier("sha256", "  ", io.BytesIO())
+
 
 class TestFetchSession(unittest.TestCase):
     def test_missing_source_urls(self):
@@ -117,6 +166,20 @@ class TestFetchSession(unittest.TestCase):
         with self.assertRaises(fetchurl.FetchUrlError) as ctx:
             fetchurl.FetchSession("sha256", None, ["http://src"])  # type: ignore[arg-type]
         self.assertIn("hash is required", str(ctx.exception))
+
+    def test_non_hex_hash_rejected(self):
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession(
+                "sha256",
+                "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+                ["http://src"],
+            )
+        self.assertIn("hexadecimal", str(ctx.exception))
+
+    def test_wrong_length_hash_rejected(self):
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession("sha256", "abcd", ["http://src"])
+        self.assertIn("hex characters", str(ctx.exception))
 
     @patch.dict(os.environ, {"FETCHURL_SERVER": '"http://cache1/api/fetchurl", "http://cache2/api/fetchurl"'})
     def test_attempt_ordering(self):
