@@ -398,6 +398,34 @@ class UrllibFetcher:
 _CHUNK_SIZE = 64 * 1024
 
 
+def _close_body(body: object) -> None:
+    """Best-effort close of an HTTP response body.
+
+    urllib and similar clients keep the connection open until the body is
+    closed. Errors from close must not override the real fetch outcome or
+    abort multi-source fallback (same pattern as the Java SDK).
+    """
+    close = getattr(body, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception:
+        return
+
+
+async def _aclose_body(body: object) -> None:
+    """Best-effort close of an async response body / chunk iterator."""
+    aclose = getattr(body, "aclose", None)
+    if callable(aclose):
+        try:
+            await aclose()
+        except Exception:
+            return
+        return
+    _close_body(body)
+
+
 def fetch(
     fetcher: Fetcher,
     algo: str,
@@ -421,6 +449,7 @@ def fetch(
 
         if status != 200:
             last_error = FetchUrlError(f"unexpected status {status}")
+            _close_body(body)
             continue
 
         verifier = session.verifier(out)
@@ -435,6 +464,8 @@ def fetch(
             if verifier.bytes_written > 0:
                 session.report_partial()
                 raise PartialWriteError(e) from e
+        finally:
+            _close_body(body)
 
     raise AllSourcesFailedError(last_error)
 
@@ -462,6 +493,7 @@ async def async_fetch(
 
         if status != 200:
             last_error = FetchUrlError(f"unexpected status {status}")
+            await _aclose_body(chunks)
             continue
 
         verifier = session.verifier(out)
@@ -476,5 +508,7 @@ async def async_fetch(
             if verifier.bytes_written > 0:
                 session.report_partial()
                 raise PartialWriteError(e) from e
+        finally:
+            await _aclose_body(chunks)
 
     raise AllSourcesFailedError(last_error)

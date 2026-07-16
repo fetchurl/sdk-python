@@ -231,6 +231,18 @@ class TestFetchSession(unittest.TestCase):
         self.assertIsNone(session.next_attempt())
 
 
+class _CloseableBody(io.BytesIO):
+    """BytesIO that records close() so tests can assert response cleanup."""
+
+    def __init__(self, data: bytes = b""):
+        super().__init__(data)
+        self.closed_count = 0
+
+    def close(self) -> None:
+        self.closed_count += 1
+        super().close()
+
+
 class TestFetch(unittest.TestCase):
     """Integration tests using a real HTTP server."""
 
@@ -348,6 +360,135 @@ class TestFetch(unittest.TestCase):
         finally:
             self._stop_server(bad)
             self._stop_server(good)
+
+    def test_closes_body_on_success(self):
+        content = b"close me"
+        h = sha256hex(content)
+        body = _CloseableBody(content)
+
+        class OkFetcher:
+            def get(self, url, headers):
+                return (200, body)
+
+        out = io.BytesIO()
+        with patch.dict(os.environ, {}, clear=True):
+            fetchurl.fetch(OkFetcher(), "sha256", h, ["http://src"], out)
+        self.assertEqual(out.getvalue(), content)
+        self.assertGreaterEqual(body.closed_count, 1)
+
+    def test_closes_body_on_non_200(self):
+        body = _CloseableBody(b"nope")
+
+        class NotFoundFetcher:
+            def get(self, url, headers):
+                return (404, body)
+
+        out = io.BytesIO()
+        with self.assertRaises(fetchurl.AllSourcesFailedError):
+            with patch.dict(os.environ, {}, clear=True):
+                fetchurl.fetch(
+                    NotFoundFetcher(), "sha256", sha256hex(b"x"), ["http://src"], out
+                )
+        self.assertGreaterEqual(body.closed_count, 1)
+
+    def test_closes_body_on_hash_mismatch(self):
+        body = _CloseableBody(b"wrong content")
+
+        class OkFetcher:
+            def get(self, url, headers):
+                return (200, body)
+
+        out = io.BytesIO()
+        with self.assertRaises(fetchurl.PartialWriteError):
+            with patch.dict(os.environ, {}, clear=True):
+                fetchurl.fetch(
+                    OkFetcher(), "sha256", sha256hex(b"right"), ["http://src"], out
+                )
+        self.assertGreaterEqual(body.closed_count, 1)
+
+    def test_closes_body_on_non_200_then_falls_back(self):
+        content = b"fallback ok"
+        h = sha256hex(content)
+        bad_body = _CloseableBody(b"")
+        good_body = _CloseableBody(content)
+        calls = {"n": 0}
+
+        class FallbackFetcher:
+            def get(self, url, headers):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    return (500, bad_body)
+                return (200, good_body)
+
+        out = io.BytesIO()
+        with patch.dict(os.environ, {}, clear=True):
+            fetchurl.fetch(
+                FallbackFetcher(), "sha256", h, ["http://a", "http://b"], out
+            )
+        self.assertEqual(out.getvalue(), content)
+        self.assertGreaterEqual(bad_body.closed_count, 1)
+        self.assertGreaterEqual(good_body.closed_count, 1)
+
+
+class TestAsyncFetch(unittest.IsolatedAsyncioTestCase):
+    async def test_async_fetch_success_and_closes(self):
+        content = b"async content"
+        h = sha256hex(content)
+        closed = {"n": 0}
+
+        class Chunks:
+            def __init__(self, data: bytes):
+                self._data = data
+                self._done = False
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if self._done:
+                    raise StopAsyncIteration
+                self._done = True
+                return self._data
+
+            async def aclose(self):
+                closed["n"] += 1
+
+        class AsyncOk:
+            async def get(self, url, headers):
+                return (200, Chunks(content))
+
+        out = io.BytesIO()
+        with patch.dict(os.environ, {}, clear=True):
+            await fetchurl.async_fetch(
+                AsyncOk(), "sha256", h, ["http://src"], out
+            )
+        self.assertEqual(out.getvalue(), content)
+        self.assertGreaterEqual(closed["n"], 1)
+
+    async def test_async_fetch_closes_on_non_200(self):
+        closed = {"n": 0}
+
+        class Chunks:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+            async def aclose(self):
+                closed["n"] += 1
+
+        class Async404:
+            async def get(self, url, headers):
+                return (404, Chunks())
+
+        out = io.BytesIO()
+        with self.assertRaises(fetchurl.AllSourcesFailedError):
+            with patch.dict(os.environ, {}, clear=True):
+                await fetchurl.async_fetch(
+                    Async404(), "sha256", sha256hex(b"x"), ["http://src"], out
+                )
+        self.assertGreaterEqual(closed["n"], 1)
 
 
 if __name__ == "__main__":
