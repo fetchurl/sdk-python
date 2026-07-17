@@ -266,6 +266,47 @@ class TestFetchSession(unittest.TestCase):
         self.assertFalse(session.succeeded())
         self.assertIsNone(session.next_attempt())
 
+    def test_with_servers_explicit_order(self):
+        """with_servers does not read FETCHURL_SERVER; servers then direct sources."""
+        h = sha256hex(b"test")
+        with patch.dict(os.environ, {"FETCHURL_SERVER": '"http://env-must-not-appear/api/fetchurl"'}):
+            session = fetchurl.FetchSession.with_servers(
+                ["http://cache1/api/fetchurl", "http://cache2/api/fetchurl/"],
+                "sha256",
+                h,
+                ["http://src1"],
+            )
+        a1 = session.next_attempt()
+        self.assertIsNotNone(a1)
+        self.assertEqual(a1.url, f"http://cache1/api/fetchurl/sha256/{h}")
+        self.assertIn("X-Source-Urls", a1.headers)
+
+        a2 = session.next_attempt()
+        self.assertEqual(a2.url, f"http://cache2/api/fetchurl/sha256/{h}")
+
+        a3 = session.next_attempt()
+        self.assertEqual(a3.url, "http://src1")
+        self.assertEqual(a3.headers, {})
+        self.assertIsNone(session.next_attempt())
+
+    def test_with_servers_empty_skips_cache(self):
+        """Empty servers list tries only direct sources (no env fallback)."""
+        h = sha256hex(b"test")
+        with patch.dict(os.environ, {"FETCHURL_SERVER": '"http://env-must-not-appear/api/fetchurl"'}):
+            session = fetchurl.FetchSession.with_servers(
+                [], "sha256", h, ["http://src-only"]
+            )
+        attempt = session.next_attempt()
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt.url, "http://src-only")
+        self.assertEqual(attempt.headers, {})
+        self.assertIsNone(session.next_attempt())
+
+    def test_with_servers_missing_sources(self):
+        h = sha256hex(b"test")
+        with self.assertRaises(fetchurl.MissingSourceUrlsError):
+            fetchurl.FetchSession.with_servers(["http://cache"], "sha256", h, [])
+
 
 class _CloseableBody(io.BytesIO):
     """BytesIO that records close() so tests can assert response cleanup."""
