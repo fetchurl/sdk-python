@@ -254,6 +254,10 @@ class FetchSession:
     Servers from ``FETCHURL_SERVER`` are tried first (with X-Source-Urls
     header forwarded), then direct source URLs in random order per spec.
 
+    The public constructor reads ``FETCHURL_SERVER`` from the environment.
+    For tests or embedding with an explicit server list, use
+    :meth:`with_servers` (does not read the environment).
+
     The caller iterates through attempts, makes HTTP requests
     with their preferred library, and reports results back::
 
@@ -270,6 +274,38 @@ class FetchSession:
         hash: str,
         source_urls: list[str],
     ):
+        servers = parse_fetchurl_server(os.environ.get("FETCHURL_SERVER", ""))
+        self._init(servers, algo, hash, source_urls)
+
+    @classmethod
+    def with_servers(
+        cls,
+        servers: list[str],
+        algo: str,
+        hash: str,
+        source_urls: list[str],
+    ) -> FetchSession:
+        """Create a session with an explicit list of cache server base URLs.
+
+        Same attempt order as the public constructor: servers first (with
+        ``X-Source-Urls``), then direct sources shuffled. Does not read
+        ``FETCHURL_SERVER``. Pass an empty ``servers`` list to try only
+        ``source_urls``.
+
+        ``servers`` entries are base URLs ready for ``/{algo}/{hash}``
+        (trailing ``/`` is stripped).
+        """
+        session = cls.__new__(cls)
+        session._init(list(servers), algo, hash, source_urls)
+        return session
+
+    def _init(
+        self,
+        servers: list[str],
+        algo: str,
+        hash: str,
+        source_urls: list[str],
+    ) -> None:
         if not source_urls:
             raise MissingSourceUrlsError()
 
@@ -280,7 +316,7 @@ class FetchSession:
                 raise FetchUrlError("source URL must not be blank")
             sources.append(source_url)
 
-        servers = parse_fetchurl_server(os.environ.get("FETCHURL_SERVER", ""))
+        # *servers* comes from __init__ (env) or with_servers (explicit); do not re-read env.
         algo = normalize_algo(algo)
         if not is_supported(algo):
             raise UnsupportedAlgorithmError(algo)
