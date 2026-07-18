@@ -273,6 +273,13 @@ class FetchSession:
         if not source_urls:
             raise MissingSourceUrlsError()
 
+        # Fail early on blank entries — same spirit as hash validation before any I/O.
+        sources: list[str] = []
+        for source_url in source_urls:
+            if source_url is None or not str(source_url).strip():
+                raise FetchUrlError("source URL must not be blank")
+            sources.append(source_url)
+
         servers = parse_fetchurl_server(os.environ.get("FETCHURL_SERVER", ""))
         algo = normalize_algo(algo)
         if not is_supported(algo):
@@ -286,17 +293,21 @@ class FetchSession:
         self._attempts: list[FetchAttempt] = []
         self._current = 0
 
-        source_header = encode_source_urls(source_urls) if source_urls else None
+        source_header = encode_source_urls(sources)
 
         for server in servers:
+            # SFV can yield empty strings (e.g. ""); skip rather than building a relative path.
+            if server is None or not str(server).strip():
+                continue
             base = server.rstrip("/")
+            if not base:
+                continue
             url = f"{base}/{algo}/{self._hash}"
-            headers: dict[str, str] = {}
-            if source_header:
-                headers["X-Source-Urls"] = source_header
-            self._attempts.append(FetchAttempt(url=url, headers=headers))
+            self._attempts.append(
+                FetchAttempt(url=url, headers={"X-Source-Urls": source_header})
+            )
 
-        direct = list(source_urls)
+        direct = list(sources)
         random.shuffle(direct)
         for url in direct:
             self._attempts.append(FetchAttempt(url=url))
