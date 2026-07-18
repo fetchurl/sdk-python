@@ -148,6 +148,42 @@ class TestFetchSession(unittest.TestCase):
         with self.assertRaises(fetchurl.MissingSourceUrlsError):
             fetchurl.FetchSession("sha256", "abc", [])
 
+    def test_blank_source_url_rejected(self):
+        h = sha256hex(b"test")
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession("sha256", h, ["http://src", "  "])
+        self.assertIn("source URL must not be blank", str(ctx.exception))
+
+    def test_none_source_url_rejected(self):
+        h = sha256hex(b"test")
+        with self.assertRaises(fetchurl.FetchUrlError) as ctx:
+            fetchurl.FetchSession(
+                "sha256", h, ["http://src", None]  # type: ignore[list-item]
+            )
+        self.assertIn("source URL must not be blank", str(ctx.exception))
+
+    @patch.dict(
+        os.environ,
+        {"FETCHURL_SERVER": '"  ", "http://cache/api/fetchurl", ""'},
+    )
+    def test_blank_servers_skipped(self):
+        """Empty SFV server entries must not become relative /algo/hash URLs."""
+        h = sha256hex(b"test")
+        session = fetchurl.FetchSession("sha256", h, ["http://src"])
+
+        a1 = session.next_attempt()
+        self.assertIsNotNone(a1)
+        self.assertTrue(
+            a1.url.startswith("http://cache/api/fetchurl/sha256/"),
+            f"blank servers must be skipped, got {a1.url}",
+        )
+        self.assertIn("X-Source-Urls", a1.headers)
+
+        a2 = session.next_attempt()
+        self.assertEqual(a2.url, "http://src")
+        self.assertEqual(a2.headers, {})
+        self.assertIsNone(session.next_attempt())
+
     def test_unsupported_algo(self):
         with self.assertRaises(fetchurl.UnsupportedAlgorithmError):
             fetchurl.FetchSession("md5", "abc", ["http://src"])
