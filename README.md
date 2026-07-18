@@ -21,12 +21,22 @@ Reference server: **[fetchurl/fetchurl](https://github.com/fetchurl/fetchurl)**.
 ## Usage
 
 ```python
-from fetchurl import fetch, UrllibFetcher, parse_fetchurl_server
-import os
+from fetchurl import fetch, UrllibFetcher
 
-servers = parse_fetchurl_server(os.environ.get("FETCHURL_SERVER", ""))
-# Or drive FetchSession yourself with your HTTP client — see package docstring.
+# Optional: export FETCHURL_SERVER (RFC 8941 list or a single URL) so cache
+# servers are tried before direct sources — see Environment below.
+
+algo = "sha256"
+content_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+source_urls = ["https://cdn.example.com/file.tar.gz"]
+
+with open("file.tar.gz", "wb") as out:
+    fetch(UrllibFetcher(), algo, content_hash, source_urls, out)
+# File is hash-verified. Raises HashMismatchError / AllSourcesFailedError on failure.
 ```
+
+Plug in any HTTP library via the `Fetcher` / `AsyncFetcher` protocols, or drive
+`FetchSession` yourself — see the package docstring.
 
 Clients **must** treat the server as untrusted and verify the hash (this SDK does that for you).
 
