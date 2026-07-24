@@ -1,1 +1,27 @@
+# Bytecode / caches
 __pycache__/
+*.py[cod]
+*$py.class
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+ENV/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
