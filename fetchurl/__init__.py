@@ -210,6 +210,9 @@ class FetchAttempt:
 class HashVerifier:
     """Wraps a binary writer, computes hash, verifies on finish().
 
+    ``finish()`` may be called only once. Further ``write`` calls fail so
+    verified content cannot be extended after a successful check.
+
     Usage::
 
         verifier = session.verifier(output_file)
@@ -225,12 +228,15 @@ class HashVerifier:
         self._expected = normalize_content_hash(normalized, expected_hash)
         self._hasher = hashlib.new(normalized)
         self._bytes_written = 0
+        self._finished = False
 
     @property
     def bytes_written(self) -> int:
         return self._bytes_written
 
     def write(self, data: bytes) -> int:
+        if self._finished:
+            raise RuntimeError("HashVerifier is finished")
         n = self._writer.write(data)
         if n is None:
             n = len(data)
@@ -239,7 +245,14 @@ class HashVerifier:
         return n
 
     def finish(self) -> None:
-        """Verify hash. Raises HashMismatchError on failure."""
+        """Verify hash. Raises HashMismatchError on failure.
+
+        May be called only once. Further ``write`` calls fail. A second
+        ``finish()`` raises RuntimeError even when the first call succeeded.
+        """
+        if self._finished:
+            raise RuntimeError("HashVerifier already finished")
+        self._finished = True
         actual = self._hasher.hexdigest()
         if actual != self._expected:
             raise HashMismatchError(self._expected, actual)

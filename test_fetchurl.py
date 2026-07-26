@@ -142,6 +142,42 @@ class TestHashVerifier(unittest.TestCase):
         with self.assertRaises(fetchurl.FetchUrlError):
             fetchurl.HashVerifier("sha256", "  ", io.BytesIO())
 
+    def test_finish_is_once_only(self):
+        data = b"hello world"
+        h = sha256hex(data)
+        out = io.BytesIO()
+        v = fetchurl.HashVerifier("sha256", h, out)
+        v.write(data)
+        v.finish()
+        with self.assertRaises(RuntimeError) as ctx:
+            v.finish()
+        self.assertIn("already finished", str(ctx.exception))
+
+    def test_write_after_finish_fails(self):
+        data = b"hello world"
+        h = sha256hex(data)
+        out = io.BytesIO()
+        v = fetchurl.HashVerifier("sha256", h, out)
+        v.write(data)
+        v.finish()
+        with self.assertRaises(RuntimeError) as ctx:
+            v.write(b"extra")
+        self.assertIn("finished", str(ctx.exception))
+        # Output must not grow after a successful verify.
+        self.assertEqual(out.getvalue(), data)
+
+    def test_write_after_mismatch_finish_fails(self):
+        """finish marks the verifier finished even when the hash mismatches."""
+        data = b"hello world"
+        wrong_hash = sha256hex(b"wrong")
+        out = io.BytesIO()
+        v = fetchurl.HashVerifier("sha256", wrong_hash, out)
+        v.write(data)
+        with self.assertRaises(fetchurl.HashMismatchError):
+            v.finish()
+        with self.assertRaises(RuntimeError):
+            v.write(b"more")
+
 
 class TestFetchSession(unittest.TestCase):
     def test_missing_source_urls(self):
