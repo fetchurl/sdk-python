@@ -10,10 +10,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "pyproject.toml"
-MANIFEST_PATHS = [str(MANIFEST.relative_to(ROOT))]
+LOCKFILE = ROOT / "uv.lock"
+# Keep pyproject.toml and the workspace package version in uv.lock in lockstep.
+MANIFEST_PATHS = [
+    str(MANIFEST.relative_to(ROOT)),
+    str(LOCKFILE.relative_to(ROOT)),
+]
 SVU_MODES = frozenset({"next", "major", "minor", "patch"})
 UPLOAD_GLOB: str | None = None
 VERSION_RE = re.compile(r'^version\s*=\s*"[^"]*"', re.M)
+# uv.lock records the editable workspace package as:
+#   name = "fetchurl-sdk"
+#   version = "x.y.z"
+LOCK_PKG_VERSION_RE = re.compile(
+    r'(name = "fetchurl-sdk"\nversion = ")[^"]*(")',
+)
 
 
 def log(msg: str) -> None:
@@ -40,6 +51,21 @@ def write_manifest(version: str) -> None:
     if not VERSION_RE.search(text):
         raise SystemExit('version = "..." not found in pyproject.toml')
     MANIFEST.write_text(VERSION_RE.sub(f'version = "{version}"', text, count=1), encoding="utf-8")
+
+    # Leaving the workspace package version stale confuses uv tooling and required a
+    # manual lockfile sync after release bumps (see sibling JS make_release).
+    if LOCKFILE.is_file():
+        lock = LOCKFILE.read_text(encoding="utf-8")
+        if not LOCK_PKG_VERSION_RE.search(lock):
+            raise SystemExit('name = "fetchurl-sdk" / version not found in uv.lock')
+        LOCKFILE.write_text(
+            LOCK_PKG_VERSION_RE.sub(
+                lambda m: f"{m.group(1)}{version}{m.group(2)}",
+                lock,
+                count=1,
+            ),
+            encoding="utf-8",
+        )
 
 
 def read_manifest_version() -> str:
